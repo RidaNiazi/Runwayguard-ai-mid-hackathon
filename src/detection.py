@@ -117,9 +117,9 @@ def detect_fod(image_path: str) -> Dict[str, Any]:
                 ],
             },
         ],
-        response_format={"type": "json_object"},  # Native JSON mode supported by qwen3.6-27b
+        response_format={"type": "json_object"},
         temperature=0.1,
-        max_completion_tokens=1024,
+        max_completion_tokens=256,  # Reduced to stay safely under Groq's 1000 OTPM limit
     )
 
     raw = response.choices[0].message.content or ""

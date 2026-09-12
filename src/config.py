@@ -25,7 +25,7 @@ USE_MOCK: bool = os.getenv("RUNWAYGUARD_MOCK", "false").lower() in ("true", "1",
 # ── Model selection (overridable via env) ──────────────────────────────────────
 # Updated to active Groq vision model ID
 VISION_MODEL: str = os.getenv(
-    "VISION_MODEL", "llama-3.2-11b-vision"
+    "VISION_MODEL", "qwen/qwen3.6-27b"
 )
 AGENT_MODEL: str = os.getenv("AGENT_MODEL", "llama-3.3-70b-versatile")
 REPORT_MODEL: str = os.getenv("REPORT_MODEL", "llama-3.3-70b-versatile")

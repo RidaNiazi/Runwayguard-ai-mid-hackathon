@@ -25,7 +25,7 @@ USE_MOCK: bool = os.getenv("RUNWAYGUARD_MOCK", "false").lower() in ("true", "1",
 
 # ── Model selection (overridable via env) ──────────────────────────────────────
 VISION_MODEL: str = os.getenv(
-    "VISION_MODEL", "qwen/qwen3.6-27b"
+    "VISION_MODEL", "llama-3.2-11b-vision-preview"
 )
 AGENT_MODEL: str = os.getenv("AGENT_MODEL", "llama3-70b-8192")
 REPORT_MODEL: str = os.getenv("REPORT_MODEL", "llama3-70b-8192")

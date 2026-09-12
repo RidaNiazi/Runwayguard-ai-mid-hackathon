@@ -65,25 +65,21 @@ def encode_image(image_path: str) -> Tuple[str, str]:
 
 
 def parse_and_validate(raw_text: str) -> Dict[str, Any]:
-    """
-    Parse raw response string into validated JSON detection schema.
-    Strips reasoning <think> tags, markdown code fences, and non-JSON text.
-    """
+    """Parse raw response string into validated JSON detection schema."""
     if not raw_text or not raw_text.strip():
         raise ValueError("Received an empty response from the vision model API.")
 
-    # 1. Strip out deepseek/qwen reasoning tags <think>...</think>
+    # 1. Strip reasoning tags <think>...</think> if present
     cleaned = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
 
     # 2. Strip markdown fences if present (e.g., ```json ... ```)
     cleaned = re.sub(r"```(?:json)?", "", cleaned).replace("```", "").strip()
 
-    # 3. Extract JSON payload using regex search for the outermost {...} block
+    # 3. Extract JSON object using regex
     json_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if json_match:
         cleaned = json_match.group(0)
 
-    # 4. Safe JSON decoding
     try:
         payload = json.loads(cleaned)
     except json.JSONDecodeError as err:
@@ -101,12 +97,14 @@ def parse_and_validate(raw_text: str) -> Dict[str, Any]:
         validated["risk_raw"] = "LOW"
     return validated
 
+
 def detect_fod(image_path: str) -> Dict[str, Any]:
-    """Run Groq vision model on a single image and return validated detection payload."""
+    """Run Groq vision model on a single image using qwen/qwen3.6-27b."""
     logger.info("Executing FOD detection on: %s", image_path)
     b64, mime = encode_image(image_path)
 
     client = _get_client()
+
     response = client.chat.completions.create(
         model=VISION_MODEL,
         messages=[
@@ -115,13 +113,13 @@ def detect_fod(image_path: str) -> Dict[str, Any]:
                 "role": "user",
                 "content": [
                     {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-                    {"type": "text", "text": "Analyze this runway image for FOD. Return JSON only according to the schema."},
+                    {"type": "text", "text": "Do not output reasoning tags. Analyze this runway image for FOD. Return JSON only according to the schema."},
                 ],
             },
         ],
-        response_format={"type": "json_object"},  # Enforces valid JSON from Groq
+        response_format={"type": "json_object"},  # Native JSON mode supported by qwen3.6-27b
         temperature=0.1,
-        max_tokens=512,
+        max_completion_tokens=1024,
     )
 
     raw = response.choices[0].message.content or ""
@@ -131,7 +129,6 @@ def detect_fod(image_path: str) -> Dict[str, Any]:
     payload["source_file"] = Path(image_path).name
     logger.info("Detection result for %s: %s", image_path, payload)
     return payload
-
 def process_directory(image_dir: str) -> List[Dict[str, Any]]:
     """
     Process all images in a directory in sorted order (simulating sequential frame feed).

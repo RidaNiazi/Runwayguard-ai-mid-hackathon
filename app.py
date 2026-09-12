@@ -620,6 +620,7 @@ with col_analysis:
     st.markdown('<span class="section-label">🧠 AI Pipeline Output</span>', unsafe_allow_html=True)
 
     # ── Process scan click ─────────────────────────────────────────────────────
+# ── Process scan click ─────────────────────────────────────────────────────
     if scan_clicked:
         has_upload = uploaded_file is not None
         has_camera = camera_img is not None
@@ -629,7 +630,10 @@ with col_analysis:
             st.warning("⚠ No input provided. Upload an image, capture from camera, or load a demo scenario first.")
         else:
             st.session_state.system_status = "ANALYZING"
-            with st.spinner("🔍  Running FOD Detection Pipeline…"):
+            # Clear previous error on new scan attempt
+            st.session_state.last_error = None
+            
+            with st.spinner("🔍 Running FOD Detection Pipeline…"):
                 try:
                     if config.USE_MOCK or (has_sample and not (has_upload or has_camera)):
                         # Demo / MOCK mode: use synthetic scenario
@@ -658,10 +662,15 @@ with col_analysis:
                         "Location":        result["location_estimate"],
                     })
                 except Exception as exc:
-                    st.error(f"Pipeline error: {exc}")
+                    # Save error to state so it survives st.rerun()
+                    st.session_state.last_error = str(exc)
                     st.session_state.system_status = "IDLE"
 
             st.rerun()
+
+    # ── Display Error Message if Scan Failed ───────────────────────────────────
+    if getattr(st.session_state, "last_error", None):
+        st.error(f"❌ Scan Failed: {st.session_state.last_error}")
 
     # ── Detection results ──────────────────────────────────────────────────────
     if st.session_state.last_result:

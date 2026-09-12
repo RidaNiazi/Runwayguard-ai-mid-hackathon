@@ -67,20 +67,23 @@ def encode_image(image_path: str) -> Tuple[str, str]:
 def parse_and_validate(raw_text: str) -> Dict[str, Any]:
     """
     Parse raw response string into validated JSON detection schema.
-    Strips markdown code fences, handles empty/non-JSON text, and applies safe fallbacks.
+    Strips reasoning <think> tags, markdown code fences, and non-JSON text.
     """
     if not raw_text or not raw_text.strip():
         raise ValueError("Received an empty response from the vision model API.")
 
-    # 1. Strip markdown fences if present
-    cleaned = re.sub(r"```(?:json)?", "", raw_text).replace("```", "").strip()
+    # 1. Strip out deepseek/qwen reasoning tags <think>...</think>
+    cleaned = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
 
-    # 2. Extract JSON payload using regex search if the model included extra text
+    # 2. Strip markdown fences if present (e.g., ```json ... ```)
+    cleaned = re.sub(r"```(?:json)?", "", cleaned).replace("```", "").strip()
+
+    # 3. Extract JSON payload using regex search for the outermost {...} block
     json_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if json_match:
         cleaned = json_match.group(0)
 
-    # 3. Safe JSON decoding
+    # 4. Safe JSON decoding
     try:
         payload = json.loads(cleaned)
     except json.JSONDecodeError as err:
@@ -97,7 +100,6 @@ def parse_and_validate(raw_text: str) -> Dict[str, Any]:
     if validated["risk_raw"] not in ("LOW", "MEDIUM", "HIGH"):
         validated["risk_raw"] = "LOW"
     return validated
-
 
 def detect_fod(image_path: str) -> Dict[str, Any]:
     """

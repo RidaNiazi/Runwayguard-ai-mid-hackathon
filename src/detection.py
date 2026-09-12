@@ -102,15 +102,7 @@ def parse_and_validate(raw_text: str) -> Dict[str, Any]:
     return validated
 
 def detect_fod(image_path: str) -> Dict[str, Any]:
-    """
-    Run Groq vision model on a single image and return validated detection payload.
-
-    Args:
-        image_path: Local filesystem path to the runway image.
-
-    Returns:
-        Structured detection dictionary.
-    """
+    """Run Groq vision model on a single image and return validated detection payload."""
     logger.info("Executing FOD detection on: %s", image_path)
     b64, mime = encode_image(image_path)
 
@@ -123,12 +115,13 @@ def detect_fod(image_path: str) -> Dict[str, Any]:
                 "role": "user",
                 "content": [
                     {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-                    {"type": "text", "text": "Analyze this runway image for FOD. Return JSON only."},
+                    {"type": "text", "text": "Analyze this runway image for FOD. Return JSON only according to the schema."},
                 ],
             },
         ],
+        response_format={"type": "json_object"},  # Enforces valid JSON from Groq
         temperature=0.1,
-        max_tokens=256,
+        max_tokens=512,
     )
 
     raw = response.choices[0].message.content or ""
@@ -138,7 +131,6 @@ def detect_fod(image_path: str) -> Dict[str, Any]:
     payload["source_file"] = Path(image_path).name
     logger.info("Detection result for %s: %s", image_path, payload)
     return payload
-
 
 def process_directory(image_dir: str) -> List[Dict[str, Any]]:
     """

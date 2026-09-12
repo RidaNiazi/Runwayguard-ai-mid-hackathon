@@ -28,22 +28,17 @@ def _get_client() -> Groq:
     return _client
 
 
-SYSTEM_PROMPT = """\
-You are a runway safety computer vision system.
-Analyze the runway image and return ONLY a valid JSON object with exactly these keys:
+SYSTEM_PROMPT = """You are an aviation safety inspector analyzing runway images for Foreign Object Debris (FOD).
+Return ONLY a valid, raw JSON object without any markdown code block formatting (do NOT use ```json).
 
+Return this exact JSON format:
 {
-  "fod_present": <boolean>,
-  "object_class": <string: e.g. "metal debris", "bird", "cone", "tool", "tire fragment", "none">,
-  "risk_raw": <string: exactly "LOW", "MEDIUM", or "HIGH">,
-  "location_estimate": <string: e.g. "touchdown zone center", "runway edge left", "threshold right", "taxiway", "none">,
-  "confidence": <float: 0.0 to 1.0>
-}
-
-Rules:
-- If no FOD is present: fod_present=false, object_class="none", risk_raw="LOW", location_estimate="none".
-- Return NOTHING except the JSON object. No markdown fences, no explanatory text.
-"""
+    "fod_present": true,
+    "object_class": "Metal Debris",
+    "risk_raw": "HIGH",
+    "location_estimate": "Centerline",
+    "confidence": 0.92
+}"""
 
 
 def encode_image(image_path: str) -> Tuple[str, str]:
@@ -72,10 +67,25 @@ def encode_image(image_path: str) -> Tuple[str, str]:
 def parse_and_validate(raw_text: str) -> Dict[str, Any]:
     """
     Parse raw response string into validated JSON detection schema.
-    Strips markdown code fences if present.
+    Strips markdown code fences, handles empty/non-JSON text, and applies safe fallbacks.
     """
+    if not raw_text or not raw_text.strip():
+        raise ValueError("Received an empty response from the vision model API.")
+
+    # 1. Strip markdown fences if present
     cleaned = re.sub(r"```(?:json)?", "", raw_text).replace("```", "").strip()
-    payload = json.loads(cleaned)
+
+    # 2. Extract JSON payload using regex search if the model included extra text
+    json_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if json_match:
+        cleaned = json_match.group(0)
+
+    # 3. Safe JSON decoding
+    try:
+        payload = json.loads(cleaned)
+    except json.JSONDecodeError as err:
+        logger.error("Failed to parse JSON response: %s | Raw content: '%s'", err, raw_text)
+        raise ValueError(f"Model response was not valid JSON: '{raw_text[:100]}...'") from err
 
     validated = {
         "fod_present": bool(payload.get("fod_present", False)),
@@ -119,7 +129,9 @@ def detect_fod(image_path: str) -> Dict[str, Any]:
         max_tokens=256,
     )
 
-    raw = response.choices[0].message.content.strip()
+    raw = response.choices[0].message.content or ""
+    raw = raw.strip()
+
     payload = parse_and_validate(raw)
     payload["source_file"] = Path(image_path).name
     logger.info("Detection result for %s: %s", image_path, payload)
